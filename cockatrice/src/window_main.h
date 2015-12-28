@@ -25,6 +25,8 @@
 #include <QSystemTrayIcon>
 #include <QProcess>
 #include <QMessageBox>
+#include <QtNetwork>
+
 #include "abstractclient.h"
 #include "pb/response.pb.h"
 
@@ -67,6 +69,9 @@ private slots:
     
     void actAbout();
 
+    void fileListFinished();
+    void actUpdate();
+
     void iconActivated(QSystemTrayIcon::ActivationReason reason);
 
     void showWindowIfHidden();
@@ -90,7 +95,7 @@ private:
     QList<QMenu *> tabMenus;
     QMenu *cockatriceMenu, *helpMenu;
     QAction *aConnect, *aDisconnect, *aSinglePlayer, *aWatchReplay, *aDeckEditor, *aFullScreen, *aSettings, *aExit,
-        *aAbout, *aCheckCardUpdates, *aRegister;
+        *aAbout, *aCheckCardUpdates, *aRegister, *aUpdate;
     TabSupervisor *tabSupervisor;
 
     QMenu *trayIconMenu;
@@ -105,6 +110,12 @@ private:
 
     QMessageBox serverShutdownMessageBox;
     QProcess * cardUpdateProcess;
+
+    //Used for the auto updater
+    QDate lastCommit;
+    QNetworkAccessManager netMan;
+    QNetworkReply *response;
+
 public:
     MainWindow(QWidget *parent = 0);
     ~MainWindow();

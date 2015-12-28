@@ -30,6 +30,7 @@
 #include <QDateTime>
 #include <QSystemTrayIcon>
 #include <QApplication>
+#include <QtNetwork>
 
 #if QT_VERSION < 0x050000
     #include <QtGui/qtextdocument.h> // for Qt::escape()
@@ -40,6 +41,7 @@
 #include "dlg_connect.h"
 #include "dlg_register.h"
 #include "dlg_settings.h"
+#include "dlg_update.h"
 #include "tab_supervisor.h"
 #include "remoteclient.h"
 #include "localserver.h"
@@ -61,6 +63,9 @@
 #define GITHUB_ISSUES_URL "https://github.com/Cockatrice/Cockatrice/issues"
 #define GITHUB_TROUBLESHOOTING_URL "https://github.com/Cockatrice/Cockatrice/wiki/Troubleshooting"
 #define GITHUB_FAQ_URL "https://github.com/Cockatrice/Cockatrice/wiki/Frequently-Asked-Questions"
+
+#define LATEST_FILES_URL "https://api.bintray.com/packages/cockatrice/Cockatrice/Cockatrice/files"
+#define DOWNLOAD_URL "https://dl.bintray.com/cockatrice/Cockatrice/"
 
 const QString MainWindow::appName = "Cockatrice";
 
@@ -288,6 +293,82 @@ void MainWindow::actAbout()
     ));
 }
 
+void MainWindow::actUpdate()
+{
+    //Request the newest builds
+    QUrl versionUrl(LATEST_FILES_URL);
+    response = netMan.get(QNetworkRequest(versionUrl));
+    connect(response, SIGNAL(finished()),
+            this, SLOT(fileListFinished()));
+}
+
+void MainWindow::fileListFinished() {
+    //Parse the version results into a JSON array
+    QString strReply = (QString) response->readAll();
+    QJsonDocument jsonResponse = QJsonDocument::fromJson(strReply.toUtf8());
+    QJsonArray json_array = jsonResponse.array();
+
+    //From this array we intend to find the correct downloadUrl, if needed
+    QString downloadUrl;
+    bool correctVersion = false, needToUpdate = false;
+    QString dateStr;
+    int downloadSize;
+
+    //Iterate over the builds
+    foreach (const QJsonValue &value, json_array)
+    {
+        //Find the build's name, date, and URL
+        QJsonObject json_obj = value.toObject();
+        QString name = json_obj["name"].toString();
+        dateStr = json_obj["created"].toString();
+        downloadSize = json_obj["size"].toInt();
+
+        //Parse the date
+        QString formatString = "yyyy-MM-dd";
+        QDate date = QDate::fromString(dateStr.remove(formatString.length(), 50), formatString);
+
+        //The correct build is identified by the name and the current OS
+#if defined(Q_OS_OSX)
+        if(name.contains("osx"))
+            correctVersion = true;
+#elif defined(Q_OS_WIN)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+        if(name.contains("qt5.exe"))
+            correctVersion = true;
+#else
+        if(name.contains("qt4.exe"))
+            correctVersion = true;
+#endif
+#endif
+            //If there's something new to download, save the download URL
+            if(correctVersion && (date > lastCommit)) {
+                downloadUrl = DOWNLOAD_URL + json_obj["path"].toString();
+                needToUpdate = true;
+                break;
+            }
+        }
+
+    //If there's something to download, prompt the user
+    if (needToUpdate)
+    {
+        if (correctVersion) {
+            QMessageBox::StandardButton reply;
+            reply = QMessageBox::question(this, "Update Cockatrice",
+                                          "A new build from " + dateStr + " is available. Download?",
+                                          QMessageBox::Yes | QMessageBox::No);
+            if (reply == QMessageBox::Yes) {
+                DlgUpdate dlg(this, downloadUrl, downloadSize);
+                dlg.exec();
+            }
+        }
+        else
+            QMessageBox::information(this, "", "Your version of Cockatrice needs to update, but there are no packages"
+                    "available for download. You may have to use a developer build or build from source yourself.");
+    }
+    else
+        QMessageBox::information(this, "", "Your version of Cockatrice is up to date.");
+}
+
 void MainWindow::serverTimeout()
 {
     QMessageBox::critical(this, tr("Error"), tr("Server timeout"));
@@ -495,6 +576,7 @@ void MainWindow::retranslateUi()
 #endif
 
     aAbout->setText(tr("&About Cockatrice"));
+    aUpdate->setText(tr("&Update Cockatrice"));
     helpMenu->setTitle(tr("&Help"));
     aCheckCardUpdates->setText(tr("Check for card updates..."));
     tabSupervisor->retranslateUi();
@@ -525,6 +607,8 @@ void MainWindow::createActions()
 
     aAbout = new QAction(this);
     connect(aAbout, SIGNAL(triggered()), this, SLOT(actAbout()));
+    aUpdate = new QAction(this);
+    connect(aUpdate, SIGNAL(triggered()), this, SLOT(actUpdate()));
 
     aCheckCardUpdates = new QAction(this);
     connect(aCheckCardUpdates, SIGNAL(triggered()), this, SLOT(actCheckCardUpdates()));
@@ -566,6 +650,7 @@ void MainWindow::createMenus()
 
     helpMenu = menuBar()->addMenu(QString());
     helpMenu->addAction(aAbout);
+    helpMenu->addAction(aUpdate);
 }
 
 MainWindow::MainWindow(QWidget *parent)
@@ -618,6 +703,11 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(&settingsCache->shortcuts(), SIGNAL(shortCutchanged()),this,SLOT(refreshShortcuts()));
     refreshShortcuts();
+
+    //Parse the commit date. We'll use this to check for new versions
+    //We know the format because it's based on git log which is documented here:
+    //  https://git-scm.com/docs/git-log#_commit_formatting
+    lastCommit = QDate::fromString(VERSION_DATE, "yyyy-MM-dd");
 }
 
 MainWindow::~MainWindow()
