@@ -51,17 +51,24 @@ void UpdateDownloader::fileFinished() {
         QString filename = file->fileName();
 
         //Write out the rest of the file
-        file->flush();
+        if (!file->flush())
+            emit error("Could not finish writing file. Please try updating again.");
         file->close();
-        delete file;
 
         QMessageBox::information((QWidget*)this->parent(), "Progress", "File closed");
+        delete file;
+        QMessageBox::information((QWidget*)this->parent(), "Progress", "File deleted");
 
         //Handle any errors we had
         if (response->error()) {
             QMessageBox::information((QWidget*)this->parent(), "Error", response->errorString());
             emit error(response->errorString());
         }
+
+        delete response;
+        QMessageBox::information((QWidget*)this->parent(), "Progress", "Response deleted");
+        delete netMan;
+        QMessageBox::information((QWidget*)this->parent(), "Progress", "NetworkAccessManager deleted");
 
         QMessageBox::information((QWidget*)this->parent(), "Progress", "No error. Emitting success...");
 
