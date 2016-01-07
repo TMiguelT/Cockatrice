@@ -50,6 +50,7 @@
 #include "settingscache.h"
 #include "tab_game.h"
 #include "version_string.h"
+#include "update_checker.h"
 
 #include "pb/game_replay.pb.h"
 #include "pb/room_commands.pb.h"
@@ -64,7 +65,6 @@
 #define GITHUB_TROUBLESHOOTING_URL "https://github.com/Cockatrice/Cockatrice/wiki/Troubleshooting"
 #define GITHUB_FAQ_URL "https://github.com/Cockatrice/Cockatrice/wiki/Frequently-Asked-Questions"
 
-#define LATEST_FILES_URL "https://api.bintray.com/packages/cockatrice/Cockatrice/Cockatrice/files"
 #define DOWNLOAD_URL "https://dl.bintray.com/cockatrice/Cockatrice/"
 
 const QString MainWindow::appName = "Cockatrice";
@@ -293,6 +293,7 @@ void MainWindow::actAbout()
     ));
 }
 
+<<<<<<< HEAD
 void MainWindow::actUpdate()
 {
     //Request the newest builds
@@ -369,6 +370,15 @@ void MainWindow::fileListFinished() {
         QMessageBox::information(this, "", "Your version of Cockatrice is up to date.");
 }
 
+||||||| merged common ancestors
+=======
+void MainWindow::actUpdate()
+{
+    DlgUpdate dlg(this);
+    dlg.exec();
+}
+
+>>>>>>> target
 void MainWindow::serverTimeout()
 {
     QMessageBox::critical(this, tr("Error"), tr("Server timeout"));

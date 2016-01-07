@@ -1,114 +1,168 @@
 #define HUMAN_DOWNLOAD_URL "https://bintray.com/cockatrice/Cockatrice/Cockatrice/_latestVersion"
+#define API_DOWNLOAD_BASE_URL "https://dl.bintray.com/cockatrice/Cockatrice/"
+#define DATE_LENGTH 10
+#define MAX_DATE_LENGTH 100
+#define SHORT_SHA1_HASH_LENGTH 7
 
 #include <QtNetwork>
 #include <QProgressDialog>
-#include <QtGui/qdesktopservices.h>
-#include <QtWidgets/qmessagebox.h>
+#include <QDesktopServices>
+#include <QMessageBox>
+#include <QVBoxLayout>
+#include <QDialogButtonBox>
+#include <QPushButton>
+#include <QLabel>
+#include <QProgressBar>
 
 #include "dlg_update.h"
 
-DlgUpdate::DlgUpdate(QWidget *parent, QString downloadUrlStr, int downloadSize)
-        : QProgressDialog(parent) {
+DlgUpdate::DlgUpdate(QWidget *parent) : QDialog(parent) {
 
-    QUrl downloadUrl = QUrl(downloadUrlStr);
+    //Handle layout
+    text = new QLabel();
+    progress = new QProgressBar;
+
+    QDialogButtonBox *buttonBox = new QDialogButtonBox();
+    ok = new QPushButton("Ok", this);
+    manualDownload = new QPushButton("Update", this);
+    enableUpdateButton(false); //Unless we know there's an update available, you can't install
+    gotoDownload = new QPushButton("Open Download Page", this);
+    buttonBox->addButton(manualDownload, QDialogButtonBox::ActionRole);
+    buttonBox->addButton(gotoDownload, QDialogButtonBox::ActionRole);
+    buttonBox->addButton(ok, QDialogButtonBox::AcceptRole);
+
+    connect(gotoDownload, SIGNAL(clicked()), this, SLOT(gotoDownloadPage()));
+    connect(manualDownload, SIGNAL(clicked()), this, SLOT(downloadUpdate()));
+    connect(ok, SIGNAL(clicked()), this, SLOT(closeDialog()));
+
+    QVBoxLayout *parentLayout = new QVBoxLayout;
+    parentLayout->addWidget(text);
+    parentLayout->addWidget(progress);
+    parentLayout->addWidget(buttonBox);
+
+    setLayout(parentLayout);
 
     //Check for SSL (this probably isn't necessary)
     if (!QSslSocket::supportsSsl()) {
+        enableUpdateButton(false);
         QMessageBox::critical(
                 this,
                 tr("Error"),
-                tr("Cockatrice was not built with SSL support, so cannot download update! "
-                           "Please visit download the new version manually at the following URL: " HUMAN_DOWNLOAD_URL));
+                tr("Cockatrice was not built with SSL support, so cannot download updates! "
+                           "Please visit the download page and update manually."));
     }
 
-    //Update the maximum progress
-    setMaximum(downloadSize);
+    //Initialize the checker and downloader class
+    uDownloader = new UpdateDownloader(this);
+    connect(uDownloader, SIGNAL(downloadSuccessful(QUrl)), this, SLOT(downloadSuccessful(QUrl)));
+    connect(uDownloader, SIGNAL(progressMade(qint64, qint64)),
+            this, SLOT(downloadProgressMade(qint64, qint64)));
+    connect(uDownloader, SIGNAL(error(QString)),
+            this, SLOT(downloadError(QString)));
 
-    //Work out the file name of the download
-    QString fileName = downloadUrlStr.section('/', -1);
+    uChecker = new UpdateChecker(this);
+    connect(uChecker, SIGNAL(finishedCheck(bool, bool, QVariantMap * )),
+            this, SLOT(finishedUpdateCheck(bool, bool, QVariantMap * )));
+    connect(uChecker, SIGNAL(error(QString)),
+            this, SLOT(updateCheckError(QString)));
 
-    //Create a temporary directory to save the file in
-    QTemporaryDir tempDir;
-    tempDir.setAutoRemove(false);
-
-    //Open the file for writing and begin the download
-    file = new QFile(tempDir.path() + '/' + fileName);
-    if (file->open(QIODevice::WriteOnly))
-        beginDownload(downloadUrl);
-    else
-        QMessageBox::critical(
-                this,
-                tr("Error"),
-                tr("A temporary file could not be opened for downloading. Please update manually from " HUMAN_DOWNLOAD_URL));
+    //Check for updates
+    beginUpdateCheck();
 }
 
-void DlgUpdate::beginDownload(QUrl downloadUrl) {
 
-    //Request the file and handle success failure, progress etc.
-    response = netMan.get(QNetworkRequest(downloadUrl));
-    connect(response, SIGNAL(finished()),
-            this, SLOT(fileFinished()));
-    connect(response, SIGNAL(readyRead()),
-            this, SLOT(fileReadyRead()));
-    connect(response, SIGNAL(downloadProgress(qint64, qint64)),
-            this, SLOT(fileProgress(qint64, qint64)));
-    connect(response, SIGNAL(error(QNetworkReply::NetworkError)),
-            this, SLOT(downloadError(QNetworkReply::NetworkError)));
-}
-
-void DlgUpdate::downloadError(QNetworkReply::NetworkError) {
-    //Alert the user to the error then close
-    QMessageBox::critical(this, tr("Error"), tr(response->errorString().toUtf8()));
+void DlgUpdate::closeDialog() {
     accept();
 }
 
-void DlgUpdate::fileFinished() {
 
-    //If we finished but there's a redirect, follow it
-    QVariant redirect = response->attribute(QNetworkRequest::RedirectionTargetAttribute);
-    if (!redirect.isNull())
-        beginDownload(redirect.toUrl());
-    else
-    {
-        //Write out the rest of the file
-        file->flush();
-        file->close();
+void DlgUpdate::gotoDownloadPage() {
+    QUrl openUrl(HUMAN_DOWNLOAD_URL);
+    QDesktopServices::openUrl(openUrl);
+}
 
-        //Handle any errors we had
-        if (response->error())
-            downloadError(response->error());
+void DlgUpdate::downloadUpdate() {
+    setLabel("Downloading update...");
+    uDownloader->beginDownload(updateUrl);
+}
 
-        //Tell the user it worked
-        QMessageBox::information(this, tr("HTTP"),
-                                 tr("Download successful!"));
+void DlgUpdate::beginUpdateCheck() {
+    progress->setMinimum(0);
+    progress->setMaximum(0);
+    setLabel("Checking for updates...");
+    uChecker->check();
+}
 
-        //Open the installer for the user
-        QDesktopServices::openUrl(QUrl::fromLocalFile(file->fileName()));
+void DlgUpdate::finishedUpdateCheck(bool needToUpdate, bool isCompatible, QVariantMap *build) {
 
-        //Delete the file handle
-        delete file;
-        file = NULL;
+    QString commitHash, commitDate;
 
-        //Close the dialogue
-        accept();
+    //Update the UI to say we've finished
+    progress->setMaximum(100);
+    setLabel("Finished checking for updates.");
+
+    //If there are no available builds, then they can't auto update.
+    enableUpdateButton(isCompatible);
+
+    //If there is an update, save its URL and work out its name
+    if (isCompatible) {
+        QString endUrl = (*build)["path"].toString();
+        updateUrl = API_DOWNLOAD_BASE_URL + endUrl;
+        commitHash = (*build)["sha1"].toString().left(SHORT_SHA1_HASH_LENGTH);
+        commitDate = (*build)["created"].toString().remove(DATE_LENGTH, MAX_DATE_LENGTH);
     }
+
+    //Give the user the appropriate message
+    if (needToUpdate) {
+        if (isCompatible) {
+
+            QMessageBox::StandardButton reply;
+            reply = QMessageBox::question(this, "Update Available",
+                                          "A new build (commit " + commitHash + ") from " + commitDate +
+                                          " is available. Download?",
+                                          QMessageBox::Yes | QMessageBox::No);
+            if (reply == QMessageBox::Yes)
+                downloadUpdate();
+        }
+        else {
+            QMessageBox::information(this, "Cockatrice Update",
+                                     tr("Your version of Cockatrice is out of date, but there are no packages"
+                                                " available for your operating system. You may have to use a developer build or build from source"
+                                                " yourself. Please visit the download page."));
+        }
+    }
+    else {
+        //If there's no need to update, tell them that. However we still allow them to run the
+        //downloader themselves if there's a compatible build
+        QMessageBox::information(this, tr("Cockatrice Update"), tr("Your version of Cockatrice is up to date."));
+    }
+
 }
 
-void DlgUpdate::fileReadyRead() {
-    //Write the HTTP result straight to the file
-    if (file->isOpen())
-        file->write(response->readAll());
-    else
-        qDebug() << "Cockatrice update file isn't open.";
+void DlgUpdate::enableUpdateButton(bool enable) {
+    manualDownload->setEnabled(enable);
 }
 
-void DlgUpdate::fileProgress(qint64 bytesRead, qint64 totalBytes) {
+void DlgUpdate::setLabel(QString newText) {
+    text->setText(newText);
+}
 
-    //Update the progress bar
-    setValue(bytesRead);
-    setMaximum(totalBytes);
+void DlgUpdate::updateCheckError(QString errorString) {
+    setLabel("Error.");
+    QMessageBox::critical(this, tr("Update Error"), "An error occurred while checking for updates: " + errorString);
+}
 
-    //Alert the user if there are errors
-    if (response->error())
-        downloadError(response->error());
+void DlgUpdate::downloadError(QString errorString) {
+    setLabel("Error.");
+    QMessageBox::critical(this, tr("Update Error"), "An error occurred while downloading an update: " + errorString);
+}
+
+void DlgUpdate::downloadSuccessful(QUrl filepath) {
+    setLabel("Installing...");
+    QDesktopServices::openUrl(filepath);
+}
+
+void DlgUpdate::downloadProgressMade(qint64 bytesRead, qint64 totalBytes) {
+    progress->setMaximum(totalBytes);
+    progress->setValue(bytesRead);
 }

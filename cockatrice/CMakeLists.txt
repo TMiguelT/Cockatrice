@@ -108,6 +108,8 @@ SET(cockatrice_SOURCES
     src/settings/messagesettings.cpp
     src/settings/gamefilterssettings.cpp
     src/settings/layoutssettings.cpp
+    src/update_checker.cpp
+    src/update_downloader.cpp
     ${VERSION_STRING_CPP}
 )
 

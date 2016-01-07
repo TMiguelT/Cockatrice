@@ -29,6 +29,7 @@
 
 #include "abstractclient.h"
 #include "pb/response.pb.h"
+#include "update_checker.h"
 
 class TabSupervisor;
 class RemoteClient;
@@ -68,6 +69,7 @@ private slots:
     void actExit();
     
     void actAbout();
+    void actUpdate();
 
     void fileListFinished();
     void actUpdate();
@@ -110,12 +112,6 @@ private:
 
     QMessageBox serverShutdownMessageBox;
     QProcess * cardUpdateProcess;
-
-    //Used for the auto updater
-    QDate lastCommit;
-    QNetworkAccessManager netMan;
-    QNetworkReply *response;
-
 public:
     MainWindow(QWidget *parent = 0);
     ~MainWindow();
