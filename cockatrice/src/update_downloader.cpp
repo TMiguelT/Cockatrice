@@ -35,6 +35,8 @@ void UpdateDownloader::beginDownload(QUrl downloadUrl) {
 }
 
 void UpdateDownloader::downloadError(QNetworkReply::NetworkError) {
+    file->close();
+    delete file;
     emit error(response->errorString().toUtf8());
 }
 
@@ -46,9 +48,12 @@ void UpdateDownloader::fileFinished() {
     else {
         QMessageBox::information((QWidget*)this->parent(), "Progress", "Finished downloading");
 
+        QString filename = file->fileName();
+
         //Write out the rest of the file
         file->flush();
         file->close();
+        delete file;
 
         QMessageBox::information((QWidget*)this->parent(), "Progress", "File closed");
 
@@ -61,7 +66,7 @@ void UpdateDownloader::fileFinished() {
         QMessageBox::information((QWidget*)this->parent(), "Progress", "No error. Emitting success...");
 
         //Emit the success signal with a URL to the download file
-        emit downloadSuccessful(QUrl::fromLocalFile(file->fileName()));
+        emit downloadSuccessful(QUrl::fromLocalFile(filename));
     }
 }
 
