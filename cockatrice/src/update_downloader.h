@@ -21,6 +21,7 @@ signals:
     void error(QString errorString);
 private:
     QUrl originalUrl;
+    QObject *fileHolder;
     QFile *file;
     QNetworkAccessManager *netMan;
     QNetworkReply *response;

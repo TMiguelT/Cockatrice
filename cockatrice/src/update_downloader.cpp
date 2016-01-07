@@ -5,6 +5,7 @@
 
 UpdateDownloader::UpdateDownloader(QObject *parent) : QObject(parent) {
     netMan = new QNetworkAccessManager(this);
+    fileHolder = new QObject(this);
 }
 
 void UpdateDownloader::beginDownload(QUrl downloadUrl) {
@@ -17,7 +18,7 @@ void UpdateDownloader::beginDownload(QUrl downloadUrl) {
     QString fileName = originalUrl.toString().section('/', -1);
 
     //Save the build in a temporary directory
-    file = new QFile(QDir::temp().path() + QDir::separator() + fileName);
+    file = new QFile(QDir::temp().path() + QDir::separator() + fileName, fileHolder);
     if (file->open(QIODevice::WriteOnly)) {
         response = netMan->get(QNetworkRequest(downloadUrl));
         connect(response, SIGNAL(finished()),
@@ -58,6 +59,8 @@ void UpdateDownloader::fileFinished() {
         QMessageBox::information((QWidget*)this->parent(), "Progress", "File closed");
         delete file;
         QMessageBox::information((QWidget*)this->parent(), "Progress", "File deleted");
+        delete fileHolder;
+        QMessageBox::information((QWidget*)this->parent(), "Progress", "File Parent deleted");
 
         //Handle any errors we had
         if (response->error()) {
