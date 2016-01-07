@@ -17,7 +17,7 @@ void UpdateDownloader::beginDownload(QUrl downloadUrl) {
     QString fileName = originalUrl.toString().section('/', -1);
 
     //Save the build in a temporary directory
-    file = new QFile(QDir::temp().path() + QDir::separator() + fileName, this);
+    file = new QFile(QDir::temp().path() + QDir::separator() + fileName);
     if (file->open(QIODevice::WriteOnly)) {
         response = netMan->get(QNetworkRequest(downloadUrl));
         connect(response, SIGNAL(finished()),
