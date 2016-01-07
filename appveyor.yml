@@ -1,4 +1,4 @@
-version: 0.0.1-branch-{branch}-build-{build}
+version: 0.0.2-branch-{branch}-build-{build}
 cache:
     - c:\protobuf
     - c:\protoc
