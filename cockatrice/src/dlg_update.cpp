@@ -158,6 +158,7 @@ void DlgUpdate::downloadError(QString errorString) {
 }
 
 void DlgUpdate::downloadSuccessful(QUrl filepath) {
+    QMessageBox::information(this, "Downloading URL", filepath.toString());
     setLabel("Installing...");
     QDesktopServices::openUrl(filepath);
 }

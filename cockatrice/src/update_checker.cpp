@@ -66,7 +66,7 @@ bool UpdateChecker::downloadMatchesCurrentOS(QVariant build)
 bool UpdateChecker::downloadMatchesCurrentOS(QVariant)
 {
     //If the OS doesn't fit one of the above #defines, then it will never match
-    return false;
+    return true;
 }
 
 #endif

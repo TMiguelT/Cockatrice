@@ -1,4 +1,5 @@
 #include <QUrl>
+#include <QMessageBox>
 
 #include "update_downloader.h"
 
@@ -43,13 +44,21 @@ void UpdateDownloader::fileFinished() {
     if (!redirect.isNull())
         beginDownload(redirect.toUrl());
     else {
+        QMessageBox::information((QWidget*)this->parent(), "Progress", "Finished downloading");
+
         //Write out the rest of the file
         file->flush();
         file->close();
 
+        QMessageBox::information((QWidget*)this->parent(), "Progress", "File closed");
+
         //Handle any errors we had
-        if (response->error())
-                emit error(response->errorString());
+        if (response->error()) {
+            QMessageBox::information((QWidget*)this->parent(), "Error", response->errorString());
+            emit error(response->errorString());
+        }
+
+        QMessageBox::information((QWidget*)this->parent(), "Progress", "No error. Emitting success...");
 
         //Emit the success signal with a URL to the download file
         emit downloadSuccessful(QUrl::fromLocalFile(file->fileName()));
