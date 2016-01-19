@@ -16,6 +16,7 @@
 #include <QApplication>
 
 #include "dlg_update.h"
+#include "window_main.h"
 
 DlgUpdate::DlgUpdate(QWidget *parent) : QDialog(parent) {
 
@@ -162,9 +163,10 @@ void DlgUpdate::downloadSuccessful(QUrl filepath) {
     setLabel("Installing...");
     //Try to open the installer. If it opens, quit Cockatrice
     if (QDesktopServices::openUrl(filepath))
-        QApplication::quit();
-    else
     {
+        QMetaObject::invokeMethod((MainWindow*) parent(), "close", Qt::QueuedConnection);
+        close();
+    } else {
         setLabel("Error");
         QMessageBox::critical(this, tr("Update Error"), "Unable to open the installer. You might be able to manually update"
                 " by closing Cockatrice and running the installer at " + filepath.toLocalFile() + ".");
