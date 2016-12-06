@@ -1,0 +1,48 @@
+name: cockatrice
+version: '2016-10-30'
+summary: 'A cross-platform virtual tabletop for multiplayer card games'
+description: |
+    Cockatrice is an open-source multiplatform supported program for playing tabletop card games over a network. 
+    The program's server design prevents any kind of client modifications to gain an unfair advantage in a game. 
+    The client also has a built in single-player mode where you can brew without being connected to a server.
+    This project is written in C++ and is using the Qt5 libraries.
+
+grade: stable
+confinement: strict
+#icon: ${SNAP}/share/icons/hicolor/48x48/apps/cockatrice.png
+parts:
+  cockatrice:
+      source: .
+      plugin: cmake
+      organize:
+        usr/bin/: bin/
+        usr/lib/: lib/
+        usr/sbin/: sbin/
+        usr/include/: include/
+        usr/share/: share/
+        share/applications/: setup/gui/
+      stage-packages:
+        - qt5-default
+        - qttools5-dev
+        - qttools5-dev-tools
+        - qtmultimedia5-dev
+        - libqt5multimedia5-plugins
+        - libqt5svg5-dev
+        - libqt5sql5-mysql
+        - libprotobuf-dev 
+        - protobuf-compiler
+        - libqt5gui5
+        - libxkbcommon0
+        - ttf-ubuntu-font-family
+        - dmz-cursor-theme
+        - light-themes
+        - shared-mime-info
+      after: 
+       - desktop-qt5
+apps:
+  cockatrice:
+    command: desktop-launch $SNAP/bin/cockatrice
+    plugs:
+      - network
+      - unity7
+
